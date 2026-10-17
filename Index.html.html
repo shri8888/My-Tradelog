@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trade log book</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --text: #1b2230;
+    --muted: #5d6779;
+    --line: #d6dce5;
+    --accent: #2848c9;
+    --accent-text: #ffffff;
+    --profit: #0d7a4e;
+    --profit-bg: #e3f4ec;
+    --loss: #bf2f2f;
+    --loss-bg: #fbe8e8;
+    --focus: #2848c9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #12161d;
+      --surface: #1a1f29;
+      --text: #e6e9ef;
+      --muted: #9aa4b5;
+      --line: #2e3542;
+      --accent: #7f98ff;
+      --accent-text: #0f1420;
+      --profit: #4cc790;
+      --profit-bg: #153227;
+      --loss: #ff7c7c;
+      --loss-bg: #3a1c1f;
+      --focus: #7f98ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { font-size: 16px; margin: 0 0 12px; font-weight: 650; }
+  .num { font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace; }
+  .pos { color: var(--profit); }
+  .neg { color: var(--loss); }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+
+  /* Summary */
+  .hero { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 0; padding: 0; overflow: hidden; }
+  .hero > div { padding: 18px; border-right: 1px solid var(--line); }
+  .hero > div:last-child { border-right: 0; }
+  .hero .label { color: var(--muted); font-size: 13px; }
+  .hero .value { font-size: 22px; font-weight: 600; margin-top: 2px; }
+  .hero .main .value { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; }
+  .hero .main.up { background: var(--profit-bg); }
+  .hero .main.down { background: var(--loss-bg); }
+  .hero .sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+  /* Form */
+  form { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field label { font-size: 13px; color: var(--muted); }
+  input, select {
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px; width: 100%;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .side { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .side input { position: absolute; opacity: 0; pointer-events: none; }
+  .side label { text-align: center; padding: 9px 0; cursor: pointer; font-size: 15px; color: var(--text); background: var(--bg); }
+  .side input:checked + label.buy { background: var(--profit); color: #fff; }
+  .side input:checked + label.sell { background: var(--loss); color: #fff; }
+  .side input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .side-wrap { position: relative; }
+  .actions { grid-column: span 2; display: flex; gap: 8px; }
+  button {
+    font: inherit; cursor: pointer; border-radius: 7px; padding: 9px 14px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; flex: 1; }
+  button.quiet { color: var(--muted); }
+  button.quiet:hover { color: var(--text); }
+  .error { grid-column: 1 / -1; color: var(--loss); font-size: 13.5px; min-height: 0; }
+  .error:empty { display: none; }
+
+  /* Tables */
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: right; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-weight: 600; font-size: 13px; color: var(--muted); }
+  th:first-child, td:first-child, th.l, td.l { text-align: left; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12.5px; font-weight: 600; }
+  .tag.buy { background: var(--profit-bg); color: var(--profit); }
+  .tag.sell { background: var(--loss-bg); color: var(--loss); }
+  .empty { color: var(--muted); padding: 18px 4px; }
+  .del { padding: 3px 9px; font-size: 13px; color: var(--muted); }
+  .del:hover { color: var(--loss); border-color: var(--loss); }
+  .row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap; }
+  .row-head h2 { margin: 0; }
+  .tools { display: flex; gap: 8px; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
+
+  @media (max-width: 760px) {
+    .hero { grid-template-columns: 1fr 1fr; }
+    .hero > div { border-bottom: 1px solid var(--line); }
+    .hero .main { grid-column: 1 / -1; }
+    form { grid-template-columns: 1fr 1fr; }
+    .actions { grid-column: 1 / -1; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero .value { transition: color .2s; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Trade log book</h1>
+    <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
+      <label for="cur">Currency</label>
+      <select id="cur" style="width:auto;">
+        <option value="$">$ Dollar</option>
+        <option value="₹">₹ Rupee</option>
+        <option value="€">€ Euro</option>
+        <option value="£">£ Pound</option>
+        <option value="">None</option>
+      </select>
+    </div>
+  </header>
+
+  <section class="panel hero" id="summary" aria-live="polite"></section>
+
+  <section class="panel">
+    <h2>Add a trade</h2>
+    <form id="form" novalidate>
+      <div class="field">
+        <label for="date">Date</label>
+        <input type="date" id="date" required>
+      </div>
+      <div class="field">
+        <label for="symbol">Symbol</label>
+        <input type="text" id="symbol" placeholder="e.g. AAPL" autocomplete="off" required>
+      </div>
+      <div class="field">
+        <span style="font-size:13px;color:var(--muted)" id="side-label">Type</span>
+        <div class="side-wrap">
+          <div class="side" role="radiogroup" aria-labelledby="side-label">
+            <input type="radio" name="side" id="buy" value="buy" checked>
+            <label for="buy" class="buy">Buy</label>
+            <input type="radio" name="side" id="sell" value="sell">
+            <label for="sell" class="sell">Sell</label>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="qty">Quantity</label>
+        <input type="number" id="qty" min="0" step="any" inputmode="decimal" required>
+      </div>
+      <div class="field">
+        <label for="price">Price per unit</label>
+        <input type="number" id="price" min="0" step="any" inputmode="decimal" required>
+      </div>
+      <div class="field">
+        <label for="fee">Fees (optional)</label>
+        <input type="number" id="fee" min="0" step="any" inputmode="decimal" placeholder="0">
+      </div>
+      <div class="error" id="error" role="alert"></div>
+      <div class="actions" style="grid-column: 1 / -1; justify-content:flex-end;">
+        <button type="submit" class="primary" style="flex:0 0 auto; min-width:160px;">Add trade</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Results by symbol</h2>
+    <div class="table-scroll" id="symbols"></div>
+    <p class="note">Profit is matched first-in, first-out: your earliest buys are matched against your sells. Net profit is realized profit minus all fees.</p>
+  </section>
+
+  <section class="panel">
+    <div class="row-head">
+      <h2>Trade log</h2>
+      <div class="tools">
+        <button type="button" id="export" class="quiet">Export CSV</button>
+        <button type="button" id="clear" class="quiet">Clear all</button>
+      </div>
+    </div>
+    <div class="table-scroll" id="log"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var STORE_KEY = 'tradelog:data';
+  var state = { trades: [], currency: '$' };
+
+  // ---------- storage ----------
+  var store = {
+    get: async function () {
+      try {
+        if (window.storage) {
+          var r = await window.storage.get(STORE_KEY);
+          return r && r.value ? JSON.parse(r.value) : null;
+        }
+      } catch (e) { return null; }
+      try {
+        var v = window['local' + 'Storage'].getItem(STORE_KEY);
+        return v ? JSON.parse(v) : null;
+      } catch (e) { return null; }
+    },
+    set: async function (data) {
+      var s = JSON.stringify(data);
+      try {
+        if (window.storage) { await window.storage.set(STORE_KEY, s); return; }
+      } catch (e) { console.error('Storage error', e); return; }
+      try { window['local' + 'Storage'].setItem(STORE_KEY, s); } catch (e) {}
+    }
+  };
+
+  // ---------- helpers ----------
+  var $ = function (id) { return document.getElementById(id); };
+  var nf = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var qf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 });
+  function money(n, signed) {
+    var c = state.currency;
+    var sign = n < 0 ? '-' : (signed && n > 0 ? '+' : '');
+    return sign + c + nf.format(Math.abs(n));
+  }
+  function cls(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+  function today() {
+    var d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+
+  // ---------- calculation (FIFO) ----------
+  function compute() {
+    var perTrade = {};   // id -> realized profit from that trade (gross), or undefined if it only opened
+    var bySymbol = {};
+    var ordered = state.trades.slice().sort(function (a, b) {
+      return a.date < b.date ? -1 : a.date > b.date ? 1 : a.id - b.id;
+    });
+
+    ordered.forEach(function (t) {
+      var s = bySymbol[t.symbol] || (bySymbol[t.symbol] = {
+        symbol: t.symbol, lots: [], realized: 0, fees: 0, closes: 0, wins: 0, buys: 0, sells: 0
+      });
+      s.fees += t.fee || 0;
+      if (t.side === 'buy') s.buys++; else s.sells++;
+
+      var remaining = t.side === 'buy' ? t.qty : -t.qty;
+      var closedPnl = 0, didClose = false;
+
+      while (remaining !== 0 && s.lots.length && Math.sign(s.lots[0].qty) !== Math.sign(remaining)) {
+        var lot = s.lots[0];
+        var m = Math.min(Math.abs(lot.qty), Math.abs(remaining));
+        // long lot closed by a sell, or short lot closed by a buy
+        closedPnl += lot.qty > 0 ? m * (t.price - lot.price) : m * (lot.price - t.price);
+        didClose = true;
+        lot.qty += lot.qty > 0 ? -m : m;
+        remaining += remaining > 0 ? -m : m;
+        if (Math.abs(lot.qty) < 1e-12) s.lots.shift();
+      }
+      if (Math.abs(remaining) > 1e-12) s.lots.push({ qty: remaining, price: t.price });
+
+      if (didClose) {
+        perTrade[t.id] = closedPnl;
+        s.realized += closedPnl;
+        s.closes++;
+        if (closedPnl > 0) s.wins++;
+      }
+    });
+
+    var syms = Object.keys(bySymbol).sort().map(function (k) {
+      var s = bySymbol[k];
+      var qty = s.lots.reduce(function (a, l) { return a + l.qty; }, 0);
+      var cost = s.lots.reduce(function (a, l) { return a + Math.abs(l.qty) * l.price; }, 0);
+      s.openQty = qty;
+      s.avgCost = Math.abs(qty) > 1e-12 ? cost / Math.abs(qty) : 0;
+      s.net = s.realized - s.fees;
+      return s;
+    });
+
+    var tot = syms.reduce(function (a, s) {
+      a.realized += s.realized; a.fees += s.fees; a.closes += s.closes; a.wins += s.wins; return a;
+    }, { realized: 0, fees: 0, closes: 0, wins: 0 });
+    tot.net = tot.realized - tot.fees;
+
+    return { perTrade: perTrade, symbols: syms, totals: tot };
+  }
+
+  // ---------- render ----------
+  function render() {
+    var r = compute();
+    var t = r.totals;
+
+    var winRate = t.closes ? Math.round((t.wins / t.closes) * 100) + '%' : '–';
+    $('summary').innerHTML =
+      '<div class="main ' + (t.net > 0 ? 'up' : t.net < 0 ? 'down' : '') + '">' +
+        '<div class="label">Net profit</div>' +
+        '<div class="value num ' + cls(t.net) + '">' + money(t.net, true) + '</div>' +
+        '<div class="sub">After fees</div>' +
+      '</div>' +
+      '<div><div class="label">Realized profit</div><div class="value num ' + cls(t.realized) + '">' + money(t.realized, true) + '</div><div class="sub">Before fees</div></div>' +
+      '<div><div class="label">Fees paid</div><div class="value num">' + money(t.fees) + '</div><div class="sub">' + state.trades.length + ' trade' + (state.trades.length === 1 ? '' : 's') + ' logged</div></div>' +
+      '<div><div class="label">Win rate</div><div class="value num">' + winRate + '</div><div class="sub">' + t.wins + ' of ' + t.closes + ' closing trades</div></div>';
+
+    // symbols table
+    if (!r.symbols.length) {
+      $('symbols').innerHTML = '<p class="empty">No trades yet. Add your first buy or sell above.</p>';
+    } else {
+      var rows = r.symbols.map(function (s) {
+        var pos = Math.abs(s.openQty) < 1e-12 ? '–' :
+          qf.format(s.openQty) + (s.openQty < 0 ? ' short' : '');
+        var avg = Math.abs(s.openQty) < 1e-12 ? '–' : money(s.avgCost);
+        return '<tr><td class="l"><strong>' + esc(s.symbol) + '</strong></td>' +
+          '<td class="num">' + pos + '</td>' +
+          '<td class="num">' + avg + '</td>' +
+          '<td class="num ' + cls(s.realized) + '">' + money(s.realized, true) + '</td>' +
+          '<td class="num">' + money(s.fees) + '</td>' +
+          '<td class="num ' + cls(s.net) + '"><strong>' + money(s.net, true) + '</strong></td></tr>';
+      }).join('');
+      $('symbols').innerHTML =
+        '<table><thead><tr><th>Symbol</th><th>Open position</th><th>Avg cost</th><th>Realized profit</th><th>Fees</th><th>Net profit</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
+    // log table
+    if (!state.trades.length) {
+      $('log').innerHTML = '<p class="empty">Your trades will show up here.</p>';
+    } else {
+      var sorted = state.trades.slice().sort(function (a, b) {
+        return a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id;
+      });
+      var body = sorted.map(function (x) {
+        var p = r.perTrade[x.id];
+        var pnl = p === undefined ? '<span style="color:var(--muted)">Opens position</span>' :
+          '<span class="num ' + cls(p) + '">' + money(p, true) + '</span>';
+        return '<tr><td class="l num">' + esc(x.date) + '</td>' +
+          '<td class="l"><strong>' + esc(x.symbol) + '</strong></td>' +
+          '<td class="l"><span class="tag ' + x.side + '">' + (x.side === 'buy' ? 'Buy' : 'Sell') + '</span></td>' +
+          '<td class="num">' + qf.format(x.qty) + '</td>' +
+          '<td class="num">' + money(x.price) + '</td>' +
+          '<td class="num">' + money(x.qty * x.price) + '</td>' +
+          '<td class="num">' + (x.fee ? money(x.fee) : '–') + '</td>' +
+          '<td>' + pnl + '</td>' +
+          '<td><button type="button" class="del" data-id="' + x.id + '" aria-label="Delete trade for ' + esc(x.symbol) + '">Delete</button></td></tr>';
+      }).join('');
+      $('log').innerHTML =
+        '<table><thead><tr><th>Date</th><th>Symbol</th><th>Type</th><th>Quantity</th><th>Price</th><th>Value</th><th>Fees</th><th>Profit on close</th><th></th></tr></thead><tbody>' + body + '</tbody></table>';
+    }
+  }
+
+  function persist() { return store.set(state); }
+
+  // ---------- events ----------
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var err = $('error');
+    var date = $('date').value;
+    var symbol = $('symbol').value.trim().toUpperCase();
+    var side = document.querySelector('input[name="side"]:checked').value;
+    var qty = parseFloat($('qty').value);
+    var price = parseFloat($('price').value);
+    var fee = parseFloat($('fee').value) || 0;
+
+    if (!date) { err.textContent = 'Choose a date.'; return; }
+    if (!symbol) { err.textContent = 'Enter a symbol, like AAPL or RELIANCE.'; return; }
+    if (!(qty > 0)) { err.textContent = 'Quantity must be greater than 0.'; return; }
+    if (!(price >= 0) || isNaN(price)) { err.textContent = 'Enter the price per unit.'; return; }
+    if (fee < 0) { err.textContent = 'Fees cannot be negative.'; return; }
+    err.textContent = '';
+
+    state.trades.push({ id: Date.now() + Math.floor(Math.random() * 1000), date: date, symbol: symbol, side: side, qty: qty, price: price, fee: fee });
+    persist();
+    render();
+    $('qty').value = ''; $('price').value = ''; $('fee').value = '';
+    $('symbol').focus();
+  });
+
+  $('log').addEventListener('click', function (e) {
+    var b = e.target.closest('.del');
+    if (!b) return;
+    var id = Number(b.getAttribute('data-id'));
+    state.trades = state.trades.filter(function (t) { return t.id !== id; });
+    persist(); render();
+  });
+
+  $('clear').addEventListener('click', function () {
+    if (!state.trades.length) return;
+    if (confirm('Delete all ' + state.trades.length + ' trades? This cannot be undone.')) {
+      state.trades = []; persist(); render();
+    }
+  });
+
+  $('cur').addEventListener('change', function () {
+    state.currency = $('cur').value; persist(); render();
+  });
+
+  $('export').addEventListener('click', function () {
+    if (!state.trades.length) return;
+    var rows = [['Date', 'Symbol', 'Type', 'Quantity', 'Price', 'Fees']].concat(
+      state.trades.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }).map(function (t) {
+        return [t.date, t.symbol, t.side, t.qty, t.price, t.fee];
+      }));
+    var csv = rows.map(function (r) {
+      return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'trades.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // ---------- init ----------
+  $('date').value = today();
+  render();
+  store.get().then(function (saved) {
+    if (saved && Array.isArray(saved.trades)) {
+      state.trades = saved.trades;
+      state.currency = typeof saved.currency === 'string' ? saved.currency : '$';
+      $('cur').value = state.currency;
+      render();
+    }
+  });
+})();
+</script>
+</body>
+</html>
