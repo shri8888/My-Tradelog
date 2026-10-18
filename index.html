@@ -38,6 +38,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     background: var(--bg);
@@ -48,6 +49,7 @@
   }
   .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
   header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .head-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   h1 { font-size: 22px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   h2 { font-size: 16px; margin: 0 0 12px; font-weight: 650; }
   .num { font-variant-numeric: tabular-nums; font-family: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace; }
@@ -55,6 +57,13 @@
   .neg { color: var(--loss); }
 
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+
+  /* Sync status */
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .status.ok .dot { background: var(--profit); }
+  .status.err { color: var(--loss); }
+  .status.err .dot { background: var(--loss); }
 
   /* Summary */
   .hero { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 0; padding: 0; overflow: hidden; }
@@ -67,8 +76,8 @@
   .hero .main.down { background: var(--loss-bg); }
   .hero .sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 
-  /* Form */
-  form { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; align-items: end; }
+  /* Forms */
+  form.trade { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; align-items: end; }
   .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .field label { font-size: 13px; color: var(--muted); }
   input, select {
@@ -83,16 +92,24 @@
   .side input:checked + label.sell { background: var(--loss); color: #fff; }
   .side input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: -2px; }
   .side-wrap { position: relative; }
-  .actions { grid-column: span 2; display: flex; gap: 8px; }
   button {
     font: inherit; cursor: pointer; border-radius: 7px; padding: 9px 14px;
     border: 1px solid var(--line); background: var(--surface); color: var(--text);
   }
-  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; flex: 1; }
+  button:disabled { opacity: .55; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
   button.quiet { color: var(--muted); }
-  button.quiet:hover { color: var(--text); }
-  .error { grid-column: 1 / -1; color: var(--loss); font-size: 13.5px; min-height: 0; }
+  button.quiet:hover:not(:disabled) { color: var(--text); }
+  button.small { padding: 5px 10px; font-size: 13px; }
+  .error { grid-column: 1 / -1; color: var(--loss); font-size: 13.5px; }
   .error:empty { display: none; }
+
+  /* Setup */
+  .setup ol { margin: 0 0 14px; padding-left: 20px; color: var(--text); }
+  .setup li { margin-bottom: 4px; }
+  .setup-grid { display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: end; }
+  .setup .error { margin-top: 10px; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 
   /* Tables */
   .table-scroll { overflow-x: auto; }
@@ -104,23 +121,20 @@
   .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12.5px; font-weight: 600; }
   .tag.buy { background: var(--profit-bg); color: var(--profit); }
   .tag.sell { background: var(--loss-bg); color: var(--loss); }
-  .empty { color: var(--muted); padding: 18px 4px; }
+  .empty { color: var(--muted); padding: 18px 4px; margin: 0; }
   .del { padding: 3px 9px; font-size: 13px; color: var(--muted); }
   .del:hover { color: var(--loss); border-color: var(--loss); }
   .row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap; }
   .row-head h2 { margin: 0; }
   .tools { display: flex; gap: 8px; }
-  .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .note { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
 
   @media (max-width: 760px) {
     .hero { grid-template-columns: 1fr 1fr; }
     .hero > div { border-bottom: 1px solid var(--line); }
     .hero .main { grid-column: 1 / -1; }
-    form { grid-template-columns: 1fr 1fr; }
-    .actions { grid-column: 1 / -1; }
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .hero .value { transition: color .2s; }
+    form.trade { grid-template-columns: 1fr 1fr; }
+    .setup-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -128,23 +142,51 @@
 <div class="wrap">
   <header>
     <h1>Trade log book</h1>
-    <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
-      <label for="cur">Currency</label>
-      <select id="cur" style="width:auto;">
-        <option value="$">$ Dollar</option>
-        <option value="₹">₹ Rupee</option>
-        <option value="€">€ Euro</option>
-        <option value="£">£ Pound</option>
-        <option value="">None</option>
-      </select>
+    <div class="head-right">
+      <span class="status" id="status" role="status"><span class="dot"></span><span id="status-text">Not connected</span></span>
+      <button type="button" class="quiet small" id="refresh">Refresh</button>
+      <button type="button" class="quiet small" id="open-setup">Sheet settings</button>
+      <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
+        <label for="cur">Currency</label>
+        <select id="cur" style="width:auto;">
+          <option value="$">$ Dollar</option>
+          <option value="₹">₹ Rupee</option>
+          <option value="€">€ Euro</option>
+          <option value="£">£ Pound</option>
+          <option value="">None</option>
+        </select>
+      </div>
     </div>
   </header>
+
+  <section class="panel setup" id="setup" hidden>
+    <h2>Connect your Google Sheet</h2>
+    <ol>
+      <li>Create a Google Sheet, then open Extensions &gt; Apps Script.</li>
+      <li>Paste in the contents of <code>Code.gs</code> and set your own secret in <code>TOKEN</code>.</li>
+      <li>Click Deploy &gt; New deployment &gt; Web app. Run as <strong>Me</strong>, access <strong>Anyone</strong>.</li>
+      <li>Copy the Web app URL and paste it below with the same secret.</li>
+    </ol>
+    <div class="setup-grid">
+      <div class="field">
+        <label for="cfg-url">Web app URL</label>
+        <input type="url" id="cfg-url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="cfg-token">Secret (TOKEN)</label>
+        <input type="password" id="cfg-token" autocomplete="off">
+      </div>
+      <button type="button" class="primary" id="cfg-save">Connect</button>
+    </div>
+    <div class="error" id="setup-error" role="alert"></div>
+    <p class="note">To keep this connection even if your browser data is cleared, put the URL and secret into <code>CONFIG</code> at the top of this file's script.</p>
+  </section>
 
   <section class="panel hero" id="summary" aria-live="polite"></section>
 
   <section class="panel">
     <h2>Add a trade</h2>
-    <form id="form" novalidate>
+    <form class="trade" id="form" novalidate>
       <div class="field">
         <label for="date">Date</label>
         <input type="date" id="date" required>
@@ -177,8 +219,8 @@
         <input type="number" id="fee" min="0" step="any" inputmode="decimal" placeholder="0">
       </div>
       <div class="error" id="error" role="alert"></div>
-      <div class="actions" style="grid-column: 1 / -1; justify-content:flex-end;">
-        <button type="submit" class="primary" style="flex:0 0 auto; min-width:160px;">Add trade</button>
+      <div style="grid-column: 1 / -1; display:flex; justify-content:flex-end;">
+        <button type="submit" class="primary" style="min-width:160px;">Add trade</button>
       </div>
     </form>
   </section>
@@ -203,29 +245,35 @@
 
 <script>
 (function () {
-  var STORE_KEY = 'tradelog:data';
-  var state = { trades: [], currency: '$' };
+  // Optional: fill these in so the connection survives cleared browser data.
+  var CONFIG = { url: '', token: '' };
 
-  // ---------- storage ----------
-  var store = {
+  var CFG_KEY = 'tradelog:config';
+  var cfg = { url: CONFIG.url, token: CONFIG.token };
+  var state = { trades: [], currency: '$' };
+  var pending = 0;
+  var connected = false;
+
+  // ---------- local storage for the connection settings only ----------
+  var cfgStore = {
     get: async function () {
       try {
         if (window.storage) {
-          var r = await window.storage.get(STORE_KEY);
+          var r = await window.storage.get(CFG_KEY);
           return r && r.value ? JSON.parse(r.value) : null;
         }
       } catch (e) { return null; }
       try {
-        var v = window['local' + 'Storage'].getItem(STORE_KEY);
+        var v = window['local' + 'Storage'].getItem(CFG_KEY);
         return v ? JSON.parse(v) : null;
       } catch (e) { return null; }
     },
     set: async function (data) {
       var s = JSON.stringify(data);
       try {
-        if (window.storage) { await window.storage.set(STORE_KEY, s); return; }
-      } catch (e) { console.error('Storage error', e); return; }
-      try { window['local' + 'Storage'].setItem(STORE_KEY, s); } catch (e) {}
+        if (window.storage) { await window.storage.set(CFG_KEY, s); return; }
+      } catch (e) { return; }
+      try { window['local' + 'Storage'].setItem(CFG_KEY, s); } catch (e) {}
     }
   };
 
@@ -234,9 +282,8 @@
   var nf = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   var qf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 });
   function money(n, signed) {
-    var c = state.currency;
     var sign = n < 0 ? '-' : (signed && n > 0 ? '+' : '');
-    return sign + c + nf.format(Math.abs(n));
+    return sign + state.currency + nf.format(Math.abs(n));
   }
   function cls(n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : ''); }
   function esc(s) {
@@ -244,15 +291,92 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
     });
   }
+  var MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  function normDate(v) {
+    var s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var m = s.match(/^[A-Za-z]{3} ([A-Za-z]{3}) (\d{1,2}) (\d{4})/);
+    if (m) {
+      var mon = MONTHS.indexOf(m[1].toLowerCase());
+      if (mon > -1) return m[3] + '-' + ('0' + (mon + 1)).slice(-2) + '-' + ('0' + m[2]).slice(-2);
+    }
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+    return s;
+  }
   function today() {
     var d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().slice(0, 10);
   }
 
+  // ---------- status ----------
+  function setStatus(kind, text) {
+    var el = $('status');
+    el.className = 'status' + (kind ? ' ' + kind : '');
+    $('status-text').textContent = text;
+  }
+
+  // ---------- sheet API ----------
+  function apiGet() {
+    var url = cfg.url + (cfg.url.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(cfg.token);
+    return fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) throw new Error(d.error || 'The sheet rejected the request');
+      return d;
+    });
+  }
+  function apiPost(payload) {
+    payload.token = cfg.token;
+    return fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) throw new Error(d.error || 'The sheet rejected the request');
+      return d;
+    });
+  }
+  function save(payload) {
+    pending++;
+    setStatus('', 'Saving to sheet…');
+    return apiPost(payload).then(function (d) {
+      pending--;
+      if (!pending) setStatus('ok', 'Saved to Google Sheet');
+      return d;
+    }, function (e) {
+      pending--;
+      setStatus('err', 'Not saved');
+      throw e;
+    });
+  }
+  function sync() {
+    if (!cfg.url || !cfg.token) return Promise.resolve();
+    setStatus('', 'Loading from sheet…');
+    return apiGet().then(function (d) {
+      state.trades = (d.trades || []).map(function (t) {
+        t.date = normDate(t.date);
+        return t;
+      });
+      state.currency = typeof d.currency === 'string' ? d.currency : '$';
+      $('cur').value = state.currency;
+      connected = true;
+      $('setup').hidden = true;
+      render();
+      setStatus('ok', 'Synced with Google Sheet');
+    }).catch(function (e) {
+      connected = false;
+      setStatus('err', 'Could not reach the sheet');
+      $('setup').hidden = false;
+      $('setup-error').textContent = 'Could not load the sheet: ' + e.message +
+        '. Check the URL and secret, and that the web app is deployed with access set to Anyone.';
+    });
+  }
+
   // ---------- calculation (FIFO) ----------
   function compute() {
-    var perTrade = {};   // id -> realized profit from that trade (gross), or undefined if it only opened
+    var perTrade = {};
     var bySymbol = {};
     var ordered = state.trades.slice().sort(function (a, b) {
       return a.date < b.date ? -1 : a.date > b.date ? 1 : a.id - b.id;
@@ -260,10 +384,9 @@
 
     ordered.forEach(function (t) {
       var s = bySymbol[t.symbol] || (bySymbol[t.symbol] = {
-        symbol: t.symbol, lots: [], realized: 0, fees: 0, closes: 0, wins: 0, buys: 0, sells: 0
+        symbol: t.symbol, lots: [], realized: 0, fees: 0, closes: 0, wins: 0
       });
       s.fees += t.fee || 0;
-      if (t.side === 'buy') s.buys++; else s.sells++;
 
       var remaining = t.side === 'buy' ? t.qty : -t.qty;
       var closedPnl = 0, didClose = false;
@@ -271,7 +394,6 @@
       while (remaining !== 0 && s.lots.length && Math.sign(s.lots[0].qty) !== Math.sign(remaining)) {
         var lot = s.lots[0];
         var m = Math.min(Math.abs(lot.qty), Math.abs(remaining));
-        // long lot closed by a sell, or short lot closed by a buy
         closedPnl += lot.qty > 0 ? m * (t.price - lot.price) : m * (lot.price - t.price);
         didClose = true;
         lot.qty += lot.qty > 0 ? -m : m;
@@ -322,14 +444,13 @@
       '<div><div class="label">Fees paid</div><div class="value num">' + money(t.fees) + '</div><div class="sub">' + state.trades.length + ' trade' + (state.trades.length === 1 ? '' : 's') + ' logged</div></div>' +
       '<div><div class="label">Win rate</div><div class="value num">' + winRate + '</div><div class="sub">' + t.wins + ' of ' + t.closes + ' closing trades</div></div>';
 
-    // symbols table
     if (!r.symbols.length) {
       $('symbols').innerHTML = '<p class="empty">No trades yet. Add your first buy or sell above.</p>';
     } else {
       var rows = r.symbols.map(function (s) {
-        var pos = Math.abs(s.openQty) < 1e-12 ? '–' :
-          qf.format(s.openQty) + (s.openQty < 0 ? ' short' : '');
-        var avg = Math.abs(s.openQty) < 1e-12 ? '–' : money(s.avgCost);
+        var flat = Math.abs(s.openQty) < 1e-12;
+        var pos = flat ? '–' : qf.format(s.openQty) + (s.openQty < 0 ? ' short' : '');
+        var avg = flat ? '–' : money(s.avgCost);
         return '<tr><td class="l"><strong>' + esc(s.symbol) + '</strong></td>' +
           '<td class="num">' + pos + '</td>' +
           '<td class="num">' + avg + '</td>' +
@@ -341,7 +462,6 @@
         '<table><thead><tr><th>Symbol</th><th>Open position</th><th>Avg cost</th><th>Realized profit</th><th>Fees</th><th>Net profit</th></tr></thead><tbody>' + rows + '</tbody></table>';
     }
 
-    // log table
     if (!state.trades.length) {
       $('log').innerHTML = '<p class="empty">Your trades will show up here.</p>';
     } else {
@@ -367,12 +487,12 @@
     }
   }
 
-  function persist() { return store.set(state); }
-
   // ---------- events ----------
   $('form').addEventListener('submit', function (e) {
     e.preventDefault();
     var err = $('error');
+    if (!connected) { err.textContent = 'Connect your Google Sheet first, so this trade can be saved.'; return; }
+
     var date = $('date').value;
     var symbol = $('symbol').value.trim().toUpperCase();
     var side = document.querySelector('input[name="side"]:checked').value;
@@ -387,30 +507,81 @@
     if (fee < 0) { err.textContent = 'Fees cannot be negative.'; return; }
     err.textContent = '';
 
-    state.trades.push({ id: Date.now() + Math.floor(Math.random() * 1000), date: date, symbol: symbol, side: side, qty: qty, price: price, fee: fee });
-    persist();
+    var trade = { id: Date.now(), date: date, symbol: symbol, side: side, qty: qty, price: price, fee: fee };
+    state.trades.push(trade);
     render();
     $('qty').value = ''; $('price').value = ''; $('fee').value = '';
     $('symbol').focus();
+
+    save({ action: 'add', trade: trade }).catch(function (e2) {
+      state.trades = state.trades.filter(function (t) { return t.id !== trade.id; });
+      render();
+      err.textContent = 'This trade was not saved to the sheet: ' + e2.message;
+    });
   });
 
   $('log').addEventListener('click', function (e) {
     var b = e.target.closest('.del');
     if (!b) return;
     var id = Number(b.getAttribute('data-id'));
+    var removed = state.trades.filter(function (t) { return t.id === id; })[0];
+    if (!removed) return;
     state.trades = state.trades.filter(function (t) { return t.id !== id; });
-    persist(); render();
+    render();
+    save({ action: 'delete', id: id }).catch(function () {
+      state.trades.push(removed);
+      render();
+      $('error').textContent = 'The trade could not be deleted from the sheet, so it was restored.';
+    });
   });
 
   $('clear').addEventListener('click', function () {
     if (!state.trades.length) return;
-    if (confirm('Delete all ' + state.trades.length + ' trades? This cannot be undone.')) {
-      state.trades = []; persist(); render();
-    }
+    if (!confirm('Delete all ' + state.trades.length + ' trades from the sheet? This cannot be undone.')) return;
+    var backup = state.trades;
+    state.trades = [];
+    render();
+    save({ action: 'clear' }).catch(function () {
+      state.trades = backup;
+      render();
+      $('error').textContent = 'The sheet could not be cleared, so your trades were restored.';
+    });
   });
 
   $('cur').addEventListener('change', function () {
-    state.currency = $('cur').value; persist(); render();
+    var prev = state.currency;
+    state.currency = $('cur').value;
+    render();
+    if (!connected) return;
+    save({ action: 'setCurrency', currency: state.currency }).catch(function () {
+      state.currency = prev; $('cur').value = prev; render();
+    });
+  });
+
+  $('refresh').addEventListener('click', function () {
+    if (!cfg.url) { $('setup').hidden = false; return; }
+    sync();
+  });
+
+  $('open-setup').addEventListener('click', function () {
+    $('cfg-url').value = cfg.url || '';
+    $('cfg-token').value = cfg.token || '';
+    $('setup-error').textContent = '';
+    $('setup').hidden = !$('setup').hidden;
+  });
+
+  $('cfg-save').addEventListener('click', function () {
+    var url = $('cfg-url').value.trim();
+    var token = $('cfg-token').value.trim();
+    if (!/^https:\/\/script\.google\.com\//.test(url)) {
+      $('setup-error').textContent = 'Paste the Web app URL from your Apps Script deployment. It starts with https://script.google.com/.';
+      return;
+    }
+    if (!token) { $('setup-error').textContent = 'Enter the secret you set in Code.gs.'; return; }
+    $('setup-error').textContent = '';
+    cfg = { url: url, token: token };
+    cfgStore.set(cfg);
+    sync();
   });
 
   $('export').addEventListener('click', function () {
@@ -429,15 +600,22 @@
     URL.revokeObjectURL(a.href);
   });
 
+  // Pick up edits made in the sheet (or on another device) when you return to the tab
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && connected && !pending) sync();
+  });
+
   // ---------- init ----------
   $('date').value = today();
   render();
-  store.get().then(function (saved) {
-    if (saved && Array.isArray(saved.trades)) {
-      state.trades = saved.trades;
-      state.currency = typeof saved.currency === 'string' ? saved.currency : '$';
-      $('cur').value = state.currency;
-      render();
+  cfgStore.get().then(function (saved) {
+    if (!cfg.url && saved && saved.url) cfg = { url: saved.url, token: saved.token || '' };
+    if (cfg.url && cfg.token) {
+      $('cfg-url').value = cfg.url;
+      $('cfg-token').value = cfg.token;
+      sync();
+    } else {
+      $('setup').hidden = false;
     }
   });
 })();
