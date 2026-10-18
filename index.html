@@ -179,7 +179,10 @@
       <button type="button" class="primary" id="cfg-save">Connect</button>
     </div>
     <div class="error" id="setup-error" role="alert"></div>
-    <p class="note">To keep this connection even if your browser data is cleared, put the URL and secret into <code>CONFIG</code> at the top of this file's script.</p>
+    <div style="margin-top:10px;">
+      <button type="button" class="quiet small" id="cfg-copy">Copy bookmark link</button>
+    </div>
+    <p class="note">Open the bookmark link on another device or browser to connect automatically. The URL and secret sit after the # in the link, so they are never sent to the website host or stored in the page's code. Don't put them in <code>CONFIG</code> if this page is hosted publicly.</p>
   </section>
 
   <section class="panel hero" id="summary" aria-live="polite"></section>
@@ -235,6 +238,7 @@
     <div class="row-head">
       <h2>Trade log</h2>
       <div class="tools">
+        <button type="button" id="qt-sync" class="quiet">Import from Questrade</button>
         <button type="button" id="export" class="quiet">Export CSV</button>
         <button type="button" id="clear" class="quiet">Clear all</button>
       </div>
@@ -246,7 +250,7 @@
 <script>
 (function () {
   // Optional: fill these in so the connection survives cleared browser data.
- var CONFIG = { url: 'https://script.google.com/macros/s/AKfycbya8toCBfKyR5GQjl_OwXq22jqNdLu5h8j_MWtTDEdFx13z7iXeNL11YW6jJViOayzX/exec', token: 'jmghfdhPRBs4NNXb9ahk3qUKSwwS8PFB' };
+  var CONFIG = { url: '', token: '' };
 
   var CFG_KEY = 'tradelog:config';
   var cfg = { url: CONFIG.url, token: CONFIG.token };
@@ -548,6 +552,30 @@
     });
   });
 
+  $('qt-sync').addEventListener('click', function () {
+    var err = $('error');
+    if (!connected) { err.textContent = 'Connect your Google Sheet first.'; return; }
+    var ans = window.prompt('Import Questrade trades from how many days back? (1 to 730)', '30');
+    if (ans === null) return;
+    var days = parseInt(ans, 10);
+    if (!(days >= 1)) { err.textContent = 'Enter a number of days, like 30.'; return; }
+    err.textContent = '';
+    var btn = $('qt-sync');
+    btn.disabled = true;
+    btn.textContent = 'Importing…';
+    save({ action: 'syncQuestrade', days: days }).then(function (d) {
+      err.textContent = '';
+      return sync().then(function () {
+        setStatus('ok', 'Imported ' + d.added + ' new trade' + (d.added === 1 ? '' : 's') + ' from Questrade');
+      });
+    }).catch(function (e) {
+      err.textContent = 'Questrade import failed: ' + e.message;
+    }).then(function () {
+      btn.disabled = false;
+      btn.textContent = 'Import from Questrade';
+    });
+  });
+
   $('cur').addEventListener('change', function () {
     var prev = state.currency;
     state.currency = $('cur').value;
@@ -605,9 +633,40 @@
     if (!document.hidden && connected && !pending) sync();
   });
 
+  $('cfg-copy').addEventListener('click', function () {
+    var u = $('cfg-url').value.trim() || cfg.url;
+    var t = $('cfg-token').value.trim() || cfg.token;
+    if (!u || !t) { $('setup-error').textContent = 'Enter the URL and secret first.'; return; }
+    var link = location.origin + location.pathname + '#url=' + encodeURIComponent(u) + '&token=' + encodeURIComponent(t);
+    var done = function () { $('setup-error').textContent = ''; $('cfg-copy').textContent = 'Copied. Bookmark it'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(done, function () { window.prompt('Copy this link:', link); });
+    } else {
+      window.prompt('Copy this link:', link);
+    }
+  });
+
+  // Connection details passed in the URL fragment (#url=...&token=...)
+  function readHash() {
+    try {
+      var h = location.hash.replace(/^#/, '');
+      if (!h) return null;
+      var p = new URLSearchParams(h);
+      var u = p.get('url'), t = p.get('token');
+      if (u && t) return { url: u, token: t };
+    } catch (e) {}
+    return null;
+  }
+
   // ---------- init ----------
   $('date').value = today();
   render();
+  var fromHash = readHash();
+  if (fromHash) {
+    cfg = fromHash;
+    cfgStore.set(cfg);
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
   cfgStore.get().then(function (saved) {
     if (!cfg.url && saved && saved.url) cfg = { url: saved.url, token: saved.token || '' };
     if (cfg.url && cfg.token) {
